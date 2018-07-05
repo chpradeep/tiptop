@@ -6,6 +6,25 @@ var logger = require('morgan');
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
+var devRouter = require('./routes/device');
+
+const mongoose = require('mongoose');
+
+//  Requiring credentials file
+const cred = require('./config/credentials');
+
+// -------- MongoDB operations----------------
+mongoose.connect(cred.database);
+
+mongoose.connection.on('connected', () => {
+    console.log('connected to Database');
+});
+
+mongoose.connection.on('error', (err) => {
+    console.log('Database error: ' + err);
+});
+
+//--------------------------------------------
 
 var app = express();
 
@@ -21,6 +40,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
+app.use('/device' , devRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
