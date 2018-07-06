@@ -4,6 +4,33 @@ var Device = require("../models/Device");
 const fs = require( 'fs' );
 const mongoose = require('mongoose');
 
+router.get('/' , function(req, res , next) {
+    if(req.query.type){
+        if(req.query.version){
+            if(req.query.actionAPI){
+                Device.actionAPI(req.query.type , req.query.version , req.query.actionAPI , function(err,ActionAPI){
+                    if(err) return res.json({status:false , message: "Invalid query"})
+                    return res.json({status:true , ActionAPI: ActionAPI})
+                });
+            }
+            else
+                Device.getByVersion(req.query.type , req.query.version , function(err,actionsList){
+                    if(err) return res.json({status:false , message: "Invalid query"})
+                    return res.json({status:true , actionsList: actionsList})
+                });
+        }
+        else{
+            console.log(req.query.type)
+            Device.getByName(req.query.type , function(err , dev){
+                if(err) return res.json({status:false , message: "Mongo error"})
+                return res.json({status:true , versions:Object.keys(dev.Versions)});
+            })
+        }
+    }
+    else
+        res.json({"Test":"fsdf"});
+})
+
 /* Crate DeviceType. */
 router.post('/', function(req, res, next) {
     if(!req.body.Name)

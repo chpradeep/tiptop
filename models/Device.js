@@ -55,6 +55,51 @@ const Device = mongoose.model('Devices' , new mongoose.Schema({
     collection: 'Devices'}
 ));
 
+module.exports.getByName = function(Name , callback){
+    DeviceType.findOne({Name:Name} , callback)
+}
+
+module.exports.getByVersion = function (Name , ver, callback){
+    DeviceType.findOne({Name:Name} , function (err,dev) {
+        if(err) return callback(err,dev)
+        if(dev && dev.Versions[ver]){
+            Versions.findById(dev.Versions[ver] , function(err , unit){
+                if(err) return callback(err,unit)
+                return callback(null , Object.keys(unit.Actions));
+            })
+        }
+    })
+}
+
+module.exports.actionAPI = function (Name , ver, actItem , callback){
+    DeviceType.findOne({Name:Name} , function (err,dev) {
+        if(err) return callback(err,dev)
+        if(dev && dev.Versions[ver]){
+            Versions.findById(dev.Versions[ver] , function(err , unit){
+                if(err) return callback(err,unit)
+                if(!unit.Actions[actItem])
+                    return callback("Invalid Action "+actItem , null);
+                
+                else{
+                    var result = unit.Actions[actItem];
+                    result["CallbackEvents"] = {}
+                    if(result.Events){
+                        result.Events.forEach(function(eve , index , arr){
+                            result.CallbackEvents[eve] = unit.Events[eve];
+                            if(index == arr.length-1){
+                                delete(result.Events);
+                                return callback(null , result)
+                            }
+                        });                    
+                    }
+                    else
+                        return callback(null , result);
+                }
+            })
+        }
+    })
+}
+
 DeviceType.find({},function(err , devs){
     if(err) return;
     devs.forEach(function(dev , index, arr){
