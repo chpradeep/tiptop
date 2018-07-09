@@ -66,6 +66,26 @@ router.put('/:Type/:changeType', function(req, res, next) {
         return res.json({'status':false , "message":"Please mention the updation type as major or minor" })
 });
 
+router.delete('/:type/:version' , function(req , res){
+  if(req.params.type && req.params.version){
+    Device.delete(req.params.type , req.params.version , function(err , ans){
+     if (err)
+          res.json({
+              success: false,
+              msg: err
+          });
+        else
+          res.json({
+              success: true,
+              msg: ans
+          }); 
+    });
+  }
+  else
+    res.json({success:false , msg:'Invalid params'})
+})
+
+
 /* Register a Device. */
 router.post('/register', function(req, res, next) {
     if(!req.body.TYPE)

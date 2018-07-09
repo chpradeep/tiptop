@@ -86,6 +86,22 @@ module.exports.getByVersion = function (Name , ver, callback){
     })
 }
 
+module.exports.delete = function (Name , ver, callback){
+    var t = {};
+    t["Versions."+ver] = 1 ;
+    DeviceType.findOne({Name:Name} ,t, function (err,dev) {
+        console.log(err , dev.Versions[ver])
+        if(err) return callback(err,dev)
+        var M = ver.split(".");
+        if(dev && dev.Versions[M[0]][M[1]]){
+            Versions.findByIdAndUpdate(dev.Versions[M[0]][M[1]] ,{deprecated:true}, function(err , unit){
+                if(err) return callback(err,unit)
+                return callback(null , unit._id);
+            })
+        }
+    })
+}
+
 module.exports.actionAPI = function (Name , ver, actItem , callback){
     var t = {};
     t["Versions."+ver] = 1 ;    
