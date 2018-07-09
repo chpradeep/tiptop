@@ -23,7 +23,14 @@ router.get('/' , function(req, res , next) {
             console.log(req.query.type)
             Device.getByName(req.query.type , function(err , dev){
                 if(err) return res.json({status:false , message: "Mongo error"})
-                return res.json({status:true , versions:Object.keys(dev.Versions)});
+                var temp = [];
+                Object.keys(dev.Versions).forEach(function(Mver , Mindex, Marr){
+                    Object.keys(dev.Versions[Mver]).forEach(function(mver , mindex, marr){
+                        temp.push(Mver+"."+mver);
+                        if(Mindex == Marr.length-1 && mindex == marr.length-1)
+                            return res.json({status:true , versions:temp});
+                    })
+                })
             })
         }
     }
@@ -42,6 +49,21 @@ router.post('/', function(req, res, next) {
         if(err) return res.json({'status':false , "message":err })
         else return res.json(ans);
     });
+});
+
+/* Update DeviceType. */
+router.put('/:Type/:changeType', function(req, res, next) {
+    if(!req.params.Type)
+        return res.json({'status':false , "message":"Device Name is missing" })
+    if(req.params.changeType && (req.params.changeType.toLowerCase()=== 'major' || req.params.changeType.toLowerCase()=== 'minor' )){
+        Device.modify(req.params.Type , req.params.changeType , 
+        req.body , function(err , ans){
+            if(err) return res.json({'status':false , "message":err })
+            else return res.json(ans);
+        });
+    }
+    else
+        return res.json({'status':false , "message":"Please mention the updation type as major or minor" })
 });
 
 /* Register a Device. */
@@ -104,6 +126,7 @@ router.get('/:deviceId/status' , function(req, res) {
         else return res.json(dev);
     })
 })
+
 router.get('/:deviceId/history' , function(req, res) {
     console.log(req.params.deviceId);
     Device.getDeviceHistory(req.params.deviceId , function (err,dev) {

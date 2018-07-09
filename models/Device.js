@@ -71,10 +71,14 @@ module.exports.getByName = function(Name , callback){
 }
 
 module.exports.getByVersion = function (Name , ver, callback){
-    DeviceType.findOne({Name:Name} , function (err,dev) {
+    var t = {};
+    t["Versions."+ver] = 1 ;
+    DeviceType.findOne({Name:Name} ,t, function (err,dev) {
+        console.log(err , dev.Versions[ver])
         if(err) return callback(err,dev)
-        if(dev && dev.Versions[ver]){
-            Versions.findById(dev.Versions[ver] , function(err , unit){
+        var M = ver.split(".");
+        if(dev && dev.Versions[M[0]][M[1]]){
+            Versions.findById(dev.Versions[M[0]][M[1]] , function(err , unit){
                 if(err) return callback(err,unit)
                 return callback(null , Object.keys(unit.Actions));
             })
@@ -83,10 +87,13 @@ module.exports.getByVersion = function (Name , ver, callback){
 }
 
 module.exports.actionAPI = function (Name , ver, actItem , callback){
-    DeviceType.findOne({Name:Name} , function (err,dev) {
+    var t = {};
+    t["Versions."+ver] = 1 ;    
+    DeviceType.findOne({Name:Name} , t , function (err,dev) {
         if(err) return callback(err,dev)
-        if(dev && dev.Versions[ver]){
-            Versions.findById(dev.Versions[ver] , function(err , unit){
+        var M = ver.split(".");
+        if(dev && dev.Versions[M[0]][M[1]]){
+            Versions.findById(dev.Versions[M[0]][M[1]] , function(err , unit){
                 if(err) return callback(err,unit)
                 if(!unit.Actions[actItem])
                     return callback("Invalid Action "+actItem , null);
@@ -115,19 +122,21 @@ DeviceType.find({},function(err , devs){
     if(err) return;
     devs.forEach(function(dev , index, arr){
         var Name = dev.Name;
-        for(var ver in dev.Versions){
-            Versions.findById(dev.Versions[ver] , function(err , unit){
-                if (err) return console.log(err , unit);
-                console.log(Name+ver);
-                Device.discriminator( Name+ver , new mongoose.Schema(unit.Properties));
-                for(var act in unit.Actions){
-                    delete(unit.Actions[act].Events);
-                    Action.discriminator( Name+ver+act , new mongoose.Schema(unit.Actions[act]));
-                }
-                for(var eve in unit.Events)
-                    Event.discriminator(Name+ver+eve , new mongoose.Schema(unit.Events[eve]));
-            });
-        }
+        Object.keys(dev.Versions).forEach(function(Mver , index , arr){
+            Object.keys(dev.Versions[Mver]).forEach(function(mver , index , arr){
+                Versions.findById(dev.Versions[Mver][mver] , function(err , unit){
+                    if (err) return console.log(err , unit);
+                    console.log(Name+Mver+"."+mver);
+                    Device.discriminator( Name+Mver+"."+mver , new mongoose.Schema(unit.Properties));
+                    for(var act in unit.Actions){
+                        delete(unit.Actions[act].Events);
+                        Action.discriminator( Name+Mver+"."+mver+act , new mongoose.Schema(unit.Actions[act]));
+                    }
+                    for(var eve in unit.Events)
+                        Event.discriminator(Name+Mver+"."+mver+eve , new mongoose.Schema(unit.Events[eve]));
+                });
+            })
+        });
     })
 })
 
@@ -192,17 +201,15 @@ module.exports.add = function(dev , callback){
 }
 
 module.exports.create = function(input , callback){
-    var DevTyp = {Versions:{}};
+    var DevTyp = {Versions:{v0:{}}};
     DevTyp['Name'] = input.Name;
-    var Vers = "v0.0";
     var orgInput = input;
-
     validate(orgInput , function(err , input , result){
         if(err) return callback(err,false);
         callback(false , input);
         Versions.create(input , function(err , ver){
             if(err) return console.log(err)
-            DevTyp['Versions'][Vers] = ver._id
+            DevTyp['Versions']["v0"]["0"] = ver._id
             console.log(DevTyp);
             DeviceType.create(DevTyp , function(err, res){
                 console.log(err , res);
@@ -213,9 +220,45 @@ module.exports.create = function(input , callback){
                     Event.discriminator(res.Name+res.LatestVersion+eve , result.Events[eve])
             })
         })
-    })
-
+    }) 
 }
+
+module.exports.modify = function(type , changeType, orgInput , callback){
+    var Vers;
+    DeviceType.findOne({Name:type} , function(err , devType){
+        if(err)
+            return callback("error in finding DeviceType "+err , null)
+        else if(!devType)
+            return callback("Device type "+type+" not found." , null);
+        else{
+            if(changeType.toLowerCase() === "major")
+                Vers = "v"+(parseInt(devType.LatestVersion.substring(1))+1).toString()+".0";
+            else
+                Vers = "v"+(parseFloat(devType.LatestVersion.substring(1)) + 0.1).toString();
+            validate(orgInput , function(err , input , result){
+                if(err) return callback(err,false);
+                callback(false , input);
+                Versions.create(input , function(err , ver){
+                    if(err) return console.log(err)
+                    var t = {};
+                    t["Versions."+Vers] = ver._id ;
+                    console.log(t);
+                    //devType.Versions[Vers] = ver._id;
+                    DeviceType.findOneAndUpdate(devType._id , t ,function(err, res){
+                        console.log(err , res);
+                        Device.discriminator( res.Name+Vers , result.Properties);
+                        for(var act in result.Actions)
+                            Action.discriminator(res.Name+Vers+act , result.Actions[act])
+                        for(var eve in result.Events)
+                            Event.discriminator(res.Name+Vers+eve , result.Events[eve])
+                    })
+                })
+            })     
+        }
+    });
+}
+
+
 
 module.exports.act = function(action , callback){
     Device.findById(action.deviceId , function(err, dev){
