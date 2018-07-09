@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const User = require("./User");
+
 const Action = mongoose.model('Action' , new mongoose.Schema({
     time : {type:Date , default:Date.now()},
     type : {type:String , required:true}
@@ -29,6 +31,7 @@ const VersionSchema = new mongoose.Schema({
         default: false
     }
 })
+
 const Versions = mongoose.model('Versions', VersionSchema);
 
 // Defining the schema for DeviceType
@@ -44,6 +47,7 @@ const DeviceTypeSchema = mongoose.Schema({
     }
     ,Versions: Object
 });
+
 const DeviceType = mongoose.model('DeviceTypes', DeviceTypeSchema);
 
 const Device = mongoose.model('Devices' , new mongoose.Schema({
@@ -54,6 +58,13 @@ const Device = mongoose.model('Devices' , new mongoose.Schema({
     discriminatorKey: 'TYPE', 
     collection: 'Devices'}
 ));
+
+module.exports.getAll = function(callback){
+    DeviceType.find({},{Name:1,LatestVersion:1,_id:0},function(err,all){
+        if(err) return callback("DB Error in fetching Device Types");
+        return callback(all);
+    })
+}
 
 module.exports.getByName = function(Name , callback){
     DeviceType.findOne({Name:Name} , callback)
@@ -165,9 +176,18 @@ function validate(input, callback){
 }
 
 module.exports.add = function(dev , callback){
-    Device.create(dev , function(err,device){
-        if(err) return callback("err" , null);
-        callback(null , device);
+    User.findOne({'email':dev.UserKey},function (err , user) {
+        if(err) return callback('DB error' , null);
+        if(!user) return callback('User not found',null);
+        else{
+            Device.create(dev , function(err,device){
+                if(err) return callback("Device creation error" , null);
+                User.findByIdAndUpdate(user._id , {$push: {devices : device._id}}, function(err,dev){
+                    if(err) return callback('User device list updation error' , null)
+                    callback(null , device)
+                });
+            }) 
+        }
     })
 }
 
@@ -198,12 +218,33 @@ module.exports.create = function(input , callback){
 }
 
 module.exports.act = function(action , callback){
-    Action.create(action , callback);
+    Device.findById(action.deviceId , function(err, dev){
+        if(err) callback('Device finding DB error' , null)
+        Action.create(action , function(err , act){
+            if(err) callback('Action creating DB error' , null)
+            Device.findByIdAndUpdate(dev._id , {$push: {lifeline : {kind:"Action" , id:act._id}}},function(err , dev){
+                if(err) return callback("Device Action updation error" , null);
+                return callback(null, act._id);
+            })
+        });  
+    })
 }
 
-module.exports.eve = function(event , callback){
-    Event.create(event , callback);
+module.exports.getDeviceStatus = function(deviceId , callback){
+    Device.findById(deviceId , {lifeline:0}, function(err, unit) {
+        if(err) return callback("error in finding deviceId"+deviceId , null);
+        if(!unit) return callback("Device not found with id "+deviceId , null);
+        return callback(null , unit);
+    })
 }
 
-
-
+module.exports.getDeviceHistory = function(deviceId , callback){
+    Device.
+        findById(deviceId , {lifeline:1,_id:0}).
+        populate('lifeline.id').
+        exec(function(err, unit) {
+            if(err) return callback("error in finding deviceId"+deviceId+","+err , null);
+            if(!unit) return callback("Device not found with id "+deviceId , null);
+            return callback(null , unit);
+        })
+}

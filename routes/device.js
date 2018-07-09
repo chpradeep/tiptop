@@ -28,7 +28,10 @@ router.get('/' , function(req, res , next) {
         }
     }
     else
-        res.json({"Test":"fsdf"});
+        Device.getAll(function(err , dev){
+            if(err) return res.json({status:false , message: err})
+            return res.json({status:true , DeviceTypes:dev});
+        })
 })
 
 /* Crate DeviceType. */
@@ -45,6 +48,10 @@ router.post('/', function(req, res, next) {
 router.post('/register', function(req, res, next) {
     if(!req.body.TYPE)
         return res.json({'status':false , "message":"Device Type is missing" })
+    if(!req.body.UserKey)
+        return res.json({'status':false , "message":"UserKer is missing" })
+    if(!req.body.MAC)
+        return res.json({'status':false , "message":"Device MAC is missing" })
     Device.add(req.body , function(err , ans){
         if(err) return res.json({'status':false , "message":err })
         else return res.json(ans);
@@ -53,6 +60,8 @@ router.post('/register', function(req, res, next) {
 
 
 router.post('/action' , function(req, res, next) {
+    if(!req.body.deviceId)
+        return res.json({status:false , message: "Please provide a device ID"})
     Device.act(req.body , function(err , ans){
         if(err) return res.json({'status':false , "message":err })
         else return res.json(ans);
@@ -60,6 +69,8 @@ router.post('/action' , function(req, res, next) {
 })
 
 router.post('/event' , function(req, res, next) {
+    if(!req.body.deviceId)
+        return res.json({status:false , message: "Please provide a device ID"})
     Device.eve(req.body , function(err , ans){
         if(err) return res.json({'status':false , "message":err })
         else return res.json(ans);
@@ -85,5 +96,20 @@ router.get( '/update/:filename', function( req, res ) {
         res.end( data );
     } );
 } );
+
+router.get('/:deviceId/status' , function(req, res) {
+    console.log(req.params.deviceId);
+    Device.getDeviceStatus(req.params.deviceId , function (err,dev) {
+        if(err) return res.json({'status':false , "message":err })
+        else return res.json(dev);
+    })
+})
+router.get('/:deviceId/history' , function(req, res) {
+    console.log(req.params.deviceId);
+    Device.getDeviceHistory(req.params.deviceId , function (err,dev) {
+        if(err) return res.json({'status':false , "message":err })
+        else return res.json(dev);
+    })
+})
 
 module.exports = router;
