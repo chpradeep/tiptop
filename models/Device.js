@@ -1,4 +1,7 @@
 const mongoose = require('mongoose');
+var request = require('request');
+
+const cred = require('../config/credentials');
 
 const User = require("./User");
 
@@ -274,18 +277,70 @@ module.exports.modify = function(type , changeType, orgInput , callback){
     });
 }
 
-
-
 module.exports.act = function(action , callback){
     Device.findById(action.deviceId , function(err, dev){
         if(err) callback('Device finding DB error' , null)
+        action.type = dev.TYPE+action.type;
         Action.create(action , function(err , act){
             if(err) callback('Action creating DB error' , null)
             Device.findByIdAndUpdate(dev._id , {$push: {lifeline : {kind:"Action" , id:act._id}}},function(err , dev){
                 if(err) return callback("Device Action updation error" , null);
-                return callback(null, act._id);
+                else if(!dev.STATUS) return callback("Device out of netowrk" , null);
+                else{
+                    request({
+                      method: 'POST',
+                      url: 'https://mqttbroker-pradeepch.c9users.io/action',
+                      body: act,
+                      json: true,
+                      callback: (err, res, body) => {
+                        if (err) {
+                          console.log(err)
+                        }
+                        console.log(body)
+                      }
+                    })
+                    return callback(null, act._id);
+                }
             })
         });  
+    })
+}
+
+module.exports.eve = function(event , callback){
+    Device.findById(event.deviceId , function(err, dev){
+        if(err) callback('Device finding DB error' , null)
+        event.type = dev.TYPE+event.type; 
+        Event.create(event , function(err , eve){
+            if(err) callback('Event creating DB error' , null)
+            else{
+                console.log(eve);
+                var eid = eve._id;
+                var temp = JSON.parse(JSON.stringify(eve));;
+                delete temp._id;
+                delete temp.__v;
+                delete temp.type;
+                delete temp.time;
+                console.log(temp)
+                var update = {
+                    $set : temp,
+                    $push: {lifeline : {kind:"Event" , id:eid}}
+                },
+                options = { strict: false , new:true};
+                Device.findByIdAndUpdate(dev._id ,update, options,function(err , dev){
+                    if(err) return callback("Device Event updation error" , null);
+                    else return callback(null, eve._id);
+                })
+            }
+        });  
+    })
+}
+
+module.exports.auth = function (DeviceId , callback) {
+    Device.findById(DeviceId , function(err,dev){
+        if(err || !dev) return callback("Not a valid deviceId" , false)
+        else{
+            return callback(null , cred.mqttSettings);   
+        }
     })
 }
 
