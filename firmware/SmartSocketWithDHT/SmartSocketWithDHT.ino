@@ -4,13 +4,10 @@
 #include <ESP8266mDNS.h>
 #include <ArduinoJson.h>
 
+
+
 const char* ssid = "abcd";
 const char* password = "asdf1234";
-
-bool switch1 = false;
-bool switch2 = false;
-bool switch3 = false;
-bool switch4 = false;
 
 int Frequency = 5;
 int TempMaxLimit = 30;
@@ -100,7 +97,7 @@ ESP8266WebServer server(80);
 const int led = LED_BUILTIN;
 
 void action(){
-  Serial.println(server.arg(0));
+  Serial.println(server.args());
   String input = server.arg(0);
   const size_t bufferSize = JSON_OBJECT_SIZE(2) + 50;
   DynamicJsonBuffer jsonBuffer(bufferSize);
@@ -111,23 +108,33 @@ void action(){
   String Switch = root["Switch"].as<String>(); // "switch1"
     if(type == "SmartSocketv0.0Switching"){
         if(Switch == "switch1")
-            switch1 = !switch1;
+            switching(0);
         else if(Switch == "switch2")
-            switch2 = !switch2;
+            switching(1);
         else if(Switch == "switch3")
-            switch3 = !switch3;
+            switching(2);
         else if(Switch == "switch4")
-            switch4 = !switch4;
-        const size_t bufferSize = JSON_ARRAY_SIZE(4);
-        DynamicJsonBuffer jsonBuffer(bufferSize);
-        JsonArray& root = jsonBuffer.createArray();
-        root.add(switch1);
-        root.add(switch2);
-        root.add(switch3);
-        root.add(switch4);
-        String result;
-        root.prettyPrintTo(result);
-        server.send(200, "text/plain", result);
+            switching(3);
+        else
+          server.send(200, "text/plain", "Invalid switch");
+        //String result;
+        //relay.prettyPrintTo(result);
+        server.send(200, "text/plain", "{}");
+    }
+    else if(type == "SmartSocketv0.0ReadTemperaturesAndHumidity"){
+      
+    }
+    else if(type == "SmartSocketv0.0ConfigMQTTProtocol"){
+      
+    }    
+    else if(type == "SmartSocketv0.0ConfigNetwork"){
+      
+    } 
+    else if(type == "SmartSocketv0.0ConfigureDevice"){
+      
+    }
+    else{
+      server.send(200, "text/plain", "Invalid action");
     }
   
 }
@@ -173,7 +180,7 @@ void setup(void){
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
-
+  setRelay();
   if (MDNS.begin("esp8266")) {
     Serial.println("MDNS responder started");
   }
