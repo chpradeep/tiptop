@@ -4,6 +4,7 @@ var Device = require("../models/Device");
 const fs = require( 'fs' );
 const mongoose = require('mongoose');
 
+
 router.get('/' , function(req, res , next) {
     if(req.query.type){
         if(req.query.version){
@@ -100,6 +101,17 @@ router.post('/register', function(req, res, next) {
     });
 });
 
+router.post('/auth' , function(req, res, next) {
+    if(!req.body.DeviceId)
+        return res.json({'status':false , "message":"Device ID is missing" })
+    Device.auth(req.body.DeviceId , function(err,dev){
+        if(err || !dev) return res.json({status:false , "message":err})
+        else{
+            return res.json(dev);   
+        }
+    })
+    
+})
 
 router.post('/action' , function(req, res, next) {
     if(!req.body.deviceId)
@@ -111,6 +123,7 @@ router.post('/action' , function(req, res, next) {
 })
 
 router.post('/event' , function(req, res, next) {
+    console.log(req.body);
     if(!req.body.deviceId)
         return res.json({status:false , message: "Please provide a device ID"})
     Device.eve(req.body , function(err , ans){
