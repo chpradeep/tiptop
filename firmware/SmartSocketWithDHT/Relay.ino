@@ -1,29 +1,35 @@
 
 void relaySetup(){
-  pinMode(pins[0],OUTPUT);
-  digitalWrite(pins[0],HIGH);
-  pinMode(pins[1],OUTPUT);
-  digitalWrite(pins[1],HIGH);
-  pinMode(pins[2],OUTPUT);
-  digitalWrite(pins[2],HIGH);
-  pinMode(pins[3],OUTPUT);
-  digitalWrite(pins[3],HIGH);
+  pinMode(pins["switch1"],OUTPUT);
+  digitalWrite(pins["switch1"],LOW);
+  pinMode(pins["switch2"],OUTPUT);
+  digitalWrite(pins["switch2"],LOW);
+  pinMode(pins["switch3"],OUTPUT);
+  digitalWrite(pins["switch3"],LOW);
+  pinMode(pins["switch4"],OUTPUT);
+  digitalWrite(pins["switch4"],LOW);
 }
 
-void switching(int i){
-  Serial.println(i);
-  Serial.println(relay[i].as<bool>());
-  if(relay[i]){
-    digitalWrite(pins[i],HIGH);
-    relay.set(i , false);
+void switching(JsonObject& root){
+  String Switch = root["Switch"].as<String>(); // "switch1"
+  if (relay.containsKey(Switch)){
+    if(relay[Switch]){
+      digitalWrite(pins[Switch],LOW);
+      relay[Switch] = false;
+      relay["msg"] = Switch+" got off";
+    }
+    else{
+      digitalWrite(pins[Switch],HIGH);
+      relay[Switch] =  true;
+      relay["msg"] = Switch+" got on";
+    }
+    String result;
+    relay.prettyPrintTo(result);
+    positiveActionResponcer(result);
   }
   else{
-    digitalWrite(pins[i],LOW);
-    relay.set(i , true);
+    negativeActionResponcer("Invalid switch");
+    return;
   }
-  Serial.println(relay[i].as<bool>());
-  String result;
-  relay.prettyPrintTo(result);
-  server.send(200, "text/plain", result);
 }
 

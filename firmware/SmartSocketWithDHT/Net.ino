@@ -58,19 +58,22 @@ void connectWifi(){
   WiFi.begin(net["SSID"], net["PASSWORD"].as<const char*>());
 }
 
+void connectTo(){
+   WiFi.disconnect();
+  WiFi.begin(tempSSID.c_str(), tempPWD.c_str());
+}
 
-void modifyWiFi(){
+void modifyWiFi(JsonObject& newwifi){
   netConfMode = true;
   retryCount = 5;
-  String input = server.arg(0);
-  const size_t bufferSize = JSON_OBJECT_SIZE(2);
-  DynamicJsonBuffer jsonBuffer(bufferSize);
-  const char* json = input.c_str();
-  Serial.println(json);
-  JsonObject& newwifi = jsonBuffer.parseObject(json);
-  tempSSID = String(newwifi["SSID"].as<String>());
-  tempPWD = newwifi["PASSWORD"].as<String>();
-  server.send(200, "text/plain",  "{\"status\":true,\"msg\":\"Device trying to connect....\"}");
-  WiFi.disconnect();
-  WiFi.begin(newwifi["SSID"], newwifi["PASSWORD"].as<const char*>());
+  //String input = server.arg(0);
+  //const size_t bufferSize = JSON_OBJECT_SIZE(2);
+  //DynamicJsonBuffer jsonBuffer(bufferSize);
+  //const char* json = input.c_str();
+  //Serial.println(json);
+  //JsonObject& newwifi = jsonBuffer.parseObject(json);
+  newwifi.printTo(Serial);
+  tempSSID = newwifi["SSID"].as<String>();
+  tempPWD = newwifi["PASSWORD"].as<String>();  
+  wifiConnect.once(5,connectTo);
 }

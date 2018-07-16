@@ -9,19 +9,17 @@
 #include <DHT.h>
 #include <DHT_U.h>
 
-#define DHTPIN            5      
+#define DHTPIN            14      
 #define DHTTYPE           DHT11     
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
 Ticker restartTicker;
-Ticker DHTTicker;
+Ticker wifiConnect;
 
 bool netConfMode=false;
 bool dhtflag = false;
 String tempSSID;
 String tempPWD;
-
-void updateSettings();
 
 const size_t netBufferSize = JSON_OBJECT_SIZE(4);
 DynamicJsonBuffer netJsonBuffer(netBufferSize);
@@ -31,15 +29,15 @@ const size_t tempNetBufferSize = JSON_OBJECT_SIZE(3);
 DynamicJsonBuffer tempNetJsonBuffer(tempNetBufferSize);
 JsonObject& tempNet = tempNetJsonBuffer.createObject();
 
-const size_t relayBufferSize = JSON_ARRAY_SIZE(4) + 30;
+const size_t relayBufferSize = JSON_OBJECT_SIZE(5);
 DynamicJsonBuffer relayJsonBuffer(relayBufferSize);
-const char* relayJson = "[false,false,false,false]";
-JsonArray& relay = relayJsonBuffer.parseArray(relayJson);
+const char* relayJson = "{\"switch1\":false,\"switch2\":false,\"switch3\":false,\"switch4\":false}";
+JsonObject& relay = relayJsonBuffer.parseObject(relayJson);
 
-const size_t pinsBufferSize = JSON_ARRAY_SIZE(4) + 10;
+const size_t pinsBufferSize = JSON_OBJECT_SIZE(4) + 50;
 DynamicJsonBuffer pinsJsonBuffer(pinsBufferSize);
-const char* pinsJson = "[0,2,5,4]";
-JsonArray& pins = pinsJsonBuffer.parseArray(pinsJson);
+const char* pinsJson = "{\"switch1\":5,\"switch2\":4,\"switch3\":0,\"switch4\":2}";
+JsonObject& pins = pinsJsonBuffer.parseObject(pinsJson);
 
 const size_t dhtSettingsBufferSize = JSON_OBJECT_SIZE(5);
 DynamicJsonBuffer dhtSettingsJsonBuffer(dhtSettingsBufferSize);
@@ -66,44 +64,44 @@ ESP8266WebServer server(80);
 
 const int led = LED_BUILTIN;
 
-void action(){
-  Serial.println(server.args());
-  String input = server.arg(0);
-  const size_t bufferSize = JSON_OBJECT_SIZE(2) + 50;
+void positiveActionResponcer(String result){
+  server.send(200, "text/plain", "{\"status\":true,\"response\":"+result+"}");
+}
+
+void negativeActionResponcer(String msg){
+  server.send(200, "text/plain", "{\"status\":false,\"msg\":\""+msg+"\"}");
+}
+
+void actionAvalyzer(String input){
+  const size_t bufferSize = JSON_OBJECT_SIZE(8);
   DynamicJsonBuffer jsonBuffer(bufferSize);
   const char* json = input.c_str();
   Serial.println(json);
   JsonObject& root = jsonBuffer.parseObject(json);
   String type = root["type"].as<String>(); // "SmartSocketv0.0Switching"
-  String Switch = root["Switch"].as<String>(); // "switch1"
-    if(type == "SmartSocketv0.0Switching"){
-        if(Switch == "switch1")
-            switching(0);
-        else if(Switch == "switch2")
-            switching(1);
-        else if(Switch == "switch3")
-            switching(2);
-        else if(Switch == "switch4")
-            switching(3);
-        else
-          server.send(200, "text/plain", "Invalid switch");
+    if(type == "Switching"){
+      switching(root);
     }
-    else if(type == "SmartSocketv0.0ReadTemperaturesAndHumidity"){
+    /*else if(type == "SmartSocketv0.0ConfigProtocol"){
       
-    }
-    else if(type == "SmartSocketv0.0ConfigMQTTProtocol"){
-      
-    }    
-    else if(type == "SmartSocketv0.0ConfigNetwork"){
-      
+    }*/    
+    else if(type == "ConfigNetwork"){
+      root["msg"] = "Device is trying to connect...";
+      String result;
+      root.printTo(result);
+      positiveActionResponcer(result);
+      modifyWiFi(root);
     } 
-    else if(type == "SmartSocketv0.0ConfigureDevice"){
-      
+    else if(type == "ConfigureDHT"){
+      updateSettings(root);
     }
     else{
-      server.send(200, "text/plain", "Invalid action");
+     negativeActionResponcer("Invalid Action");
     }
-  
+}
+
+void action(){
+  actionAvalyzer(server.arg(0));
 }
 
 void handleNotFound(){
@@ -131,16 +129,8 @@ void setup(void){
   if(setConfigs()){
     connectWifi();
   }
-  server.on("/settings", updateSettings);
   server.on("/action", action);
-  server.on("/wifi" , modifyWiFi);
-  //server.on("/switching" switching);
-  server.on("/inline", [](){
-    server.send(200, "text/plain", "this works as well");
-  });
-
   server.onNotFound(handleNotFound);
-
   server.begin();
   Serial.println("HTTP server started");
 }

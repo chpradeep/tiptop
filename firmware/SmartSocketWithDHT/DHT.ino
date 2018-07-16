@@ -32,21 +32,25 @@ void setupDHT(){
   dhtSettings["TempMinLimit"] = 0;
   dhtSettings["HumiMaxLimit"] = 0;
   dhtSettings["HuniMinLimit"] = 0;
+  dhtSettings["msg"] = "Temperature and Humidiy sensor default settings";
   dhtflag= true;
 }
 
-void updateSettings(){
-  String input = server.arg(0);
-  const size_t bufferSize = JSON_OBJECT_SIZE(5);
-  DynamicJsonBuffer jsonBuffer(bufferSize);
-  const char* json = input.c_str();
-  Serial.println(json);
-  JsonObject& newSettings = jsonBuffer.parseObject(json);
+void updateSettings(JsonObject& newSettings){
+  //String input = server.arg(0);
+  //const size_t bufferSize = JSON_OBJECT_SIZE(5);
+  //DynamicJsonBuffer jsonBuffer(bufferSize);
+  //const char* json = input.c_str();
+  //Serial.println(json);
+  //JsonObject& newSettings = jsonBuffer.parseObject(json);
   dhtSettings["Frequency"] = newSettings["Frequency"].as<int>();
   dhtSettings["TempMaxLimit"] = newSettings["TempMaxLimit"].as<float>();
   dhtSettings["TempMinLimit"] = newSettings["TempMinLimit"].as<float>();
   dhtSettings["HumiMaxLimit"] = newSettings["HumiMaxLimit"].as<float>();
   dhtSettings["HuniMinLimit"] = newSettings["HuniMinLimit"].as<float>();
-  server.send(200, "text/plain",  "{\"status\":true,\"msg\":\"Settings updated\"}");
   dhtflag = true;
+  dhtSettings["msg"] = "Temperature and Humidiy sensor updated settings ";
+  String result;
+  dhtSettings.prettyPrintTo(result);
+  positiveActionResponcer(result);
 }
