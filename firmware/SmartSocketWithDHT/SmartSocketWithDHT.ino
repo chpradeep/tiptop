@@ -3,95 +3,65 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <ArduinoJson.h>
+#include <FS.h>
+#include <Ticker.h>
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
 
+#define DHTPIN            5      
+#define DHTTYPE           DHT11     
+DHT_Unified dht(DHTPIN, DHTTYPE);
 
+Ticker restartTicker;
+Ticker DHTTicker;
 
-const char* ssid = "abcd";
-const char* password = "asdf1234";
+bool netConfMode=false;
+bool dhtflag = false;
+String tempSSID;
+String tempPWD;
 
-int Frequency = 5;
-int TempMaxLimit = 30;
-int TempMinLimit = 0;
-int HumiMaxLimit = 70;
-int HuniMinLimit = 40;
+void updateSettings();
 
-float Temperature = 0;
-float Humidity = 0;
+const size_t netBufferSize = JSON_OBJECT_SIZE(4);
+DynamicJsonBuffer netJsonBuffer(netBufferSize);
+JsonObject& net = netJsonBuffer.createObject();
 
-/*var BROKER_URL = "";
-var PUB_TOPIC = "";
-var SUB_TOPIC = "";
-var USERNAME = "";
-var PASSWORD = "";
+const size_t tempNetBufferSize = JSON_OBJECT_SIZE(3);
+DynamicJsonBuffer tempNetJsonBuffer(tempNetBufferSize);
+JsonObject& tempNet = tempNetJsonBuffer.createObject();
 
+const size_t relayBufferSize = JSON_ARRAY_SIZE(4) + 30;
+DynamicJsonBuffer relayJsonBuffer(relayBufferSize);
+const char* relayJson = "[false,false,false,false]";
+JsonArray& relay = relayJsonBuffer.parseArray(relayJson);
 
-function onConnect(){
-    msg.payload = {"SSID":SSID , "IP":"fdsd" , "STATUS":true}
-}
-function onDisconnect(){
-    msg.payload = {"STATUS":false}
-}
-function onUpdateOfTemperaturesAndHumidity(){
-    node.log("fdsds");
-    msg.payload = {"Temp":Temperature , "Humi":Humidity}
-}
-function onUpdateOfDeviceConfiguration(){
-    msg.payload = {
-        "Frequency": Frequency,
-        "TempMaxLimit": TempMaxLimit,
-        "TempMinLimit": TempMinLimit,
-        "HumiMaxLimit": HumiMaxLimit,
-        "HuniMinLimit": HuniMinLimit
-    }
-}
-function onSwitching(){
-    msg.payload = [switch1 ,switch2 ,switch3 ,switch4];
-}*/
+const size_t pinsBufferSize = JSON_ARRAY_SIZE(4) + 10;
+DynamicJsonBuffer pinsJsonBuffer(pinsBufferSize);
+const char* pinsJson = "[0,2,5,4]";
+JsonArray& pins = pinsJsonBuffer.parseArray(pinsJson);
 
-/*
-var input = msg.payload;
-if(input.type == "SmartSocketv0.0Switching"){
-    var buttonNo = input['Switch'];
-    node.log(buttonNo)
-    if(buttonNo){
-        console.log("Its switching button "+buttonNo);
-        if(buttonNo == "switch1")
-            switch1 = !switch1;
-        if(buttonNo == "switch2")
-            switch2 = !switch2;
-        if(buttonNo == "switch3")
-            switch3 = !switch3;
-        if(buttonNo == "switch4")
-            switch4 = !switch4;
-        onSwitching();
-    }
-}
-else if(input.type == "SmartSocketv0.0ConfigMQTTProtocol"){
-    BROKER_URL = input['BROKER_URL'];
-    PUB_TOPIC = input['PUB_TOPIC'];
-    SUB_TOPIC = input['SUB_TOPIC'];
-    USERNAME = input['USERNAME'];
-    PASSWORD = input['PASSWORD'];
-    onConnect();
-}
-else if(input.type == "SmartSocketv0.0ReadTemperaturesAndHumidity"){
-    onUpdateOfTemperaturesAndHumidity();
-}
-else if(input['type'] == "SmartSocketv0.0ConfigureDevice"){
-    Frequency = input['Frequency'];
-    TempMaxLimit = input['TempMaxLimit'];
-    TempMinLimit = input['TempMinLimit'];
-    HumiMaxLimit = input['HumiMaxLimit'];
-    HuniMinLimit = input['HuniMinLimit'];
-    onUpdateOfDeviceConfiguration();
-}
-else if(input.type == "SmartSocketv0.0ConfigNetwork"){
-    SSID = input['SSID'];
-    PASSWORD = input['PASSWORD'];
-    onConnect();
-}
-return msg;
-*/
+const size_t dhtSettingsBufferSize = JSON_OBJECT_SIZE(5);
+DynamicJsonBuffer dhtSettingsJsonBuffer(dhtSettingsBufferSize);
+JsonObject& dhtSettings = dhtSettingsJsonBuffer.createObject();
+
+const size_t dhtReadingsBufferSize = JSON_OBJECT_SIZE(2);
+DynamicJsonBuffer dhtReadingsJsonBuffer(dhtReadingsBufferSize);
+JsonObject& dhtReadings = dhtReadingsJsonBuffer.createObject();
+
+const size_t mqttBufferSize = JSON_OBJECT_SIZE(5);
+DynamicJsonBuffer mqttJsonBuffer(mqttBufferSize);
+JsonObject& mqttConfigs = mqttJsonBuffer.createObject();
+
+const size_t devBufferSize = JSON_OBJECT_SIZE(4);
+DynamicJsonBuffer devJsonBuffer(devBufferSize);
+JsonObject& dev = devJsonBuffer.createObject();
+
+WiFiEventHandler wifiConnectHandler;
+WiFiEventHandler wifiDisconnectHandler;
+
+int retryCount;
+
 ESP8266WebServer server(80);
 
 const int led = LED_BUILTIN;
@@ -117,9 +87,6 @@ void action(){
             switching(3);
         else
           server.send(200, "text/plain", "Invalid switch");
-        //String result;
-        //relay.prettyPrintTo(result);
-        server.send(200, "text/plain", "{}");
     }
     else if(type == "SmartSocketv0.0ReadTemperaturesAndHumidity"){
       
@@ -137,13 +104,6 @@ void action(){
       server.send(200, "text/plain", "Invalid action");
     }
   
-}
-
-void handleRoot() {
-  digitalWrite(led, 1);
-  server.send(200, "text/plain", "hello from esp8266!");
-  Serial.println("yup working");
-  digitalWrite(led, 0);
 }
 
 void handleNotFound(){
@@ -164,29 +124,17 @@ void handleNotFound(){
 }
 
 void setup(void){
+  Serial.begin(115200);
+  SPIFFS.begin();
   pinMode(led, OUTPUT);
   digitalWrite(led, 0);
-  Serial.begin(115200);
-  WiFi.begin(ssid, password);
-  Serial.println("");
-
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  if(setConfigs()){
+    connectWifi();
   }
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-  setRelay();
-  if (MDNS.begin("esp8266")) {
-    Serial.println("MDNS responder started");
-  }
-
-  server.on("/", handleRoot);
+  server.on("/settings", updateSettings);
   server.on("/action", action);
+  server.on("/wifi" , modifyWiFi);
+  //server.on("/switching" switching);
   server.on("/inline", [](){
     server.send(200, "text/plain", "this works as well");
   });
@@ -199,4 +147,52 @@ void setup(void){
 
 void loop(void){
   server.handleClient();
+  if(dhtflag){
+    // Get temperature event and print its value.
+    sensors_event_t event;  
+    dht.temperature().getEvent(&event);
+    if (isnan(event.temperature)) {
+      Serial.println("Error reading temperature!");
+    }
+    else {
+      Serial.print("Temperature: ");
+      Serial.print(event.temperature);
+      Serial.println(" *C");
+      if(dhtSettings["TempMaxLimit"] == 0 && dhtSettings["TempMinLimit"] ==0){
+        dhtReadings["Temperature"] = event.temperature; 
+        dhtReadings.printTo(Serial);
+        
+      }
+      else if(dhtSettings["TempMaxLimit"]<=event.temperature || dhtSettings["TempMinLimit"]>=event.temperature ){
+        dhtReadings["Temperature"] = event.temperature; 
+        dhtReadings.printTo(Serial);
+      }
+    }
+    // Get humidity event and print its value.
+    dht.humidity().getEvent(&event);
+    if (isnan(event.relative_humidity)) {
+      Serial.println("Error reading humidity!");
+    }
+    else {
+      Serial.print("Humidity: ");
+      Serial.print(event.relative_humidity);
+      Serial.println("%");
+      if(dhtSettings["HumiMaxLimit"] ==0&& dhtSettings["HumiMinLimit"] ==0){
+        dhtReadings["Humidity"] = event.relative_humidity; 
+        dhtReadings.printTo(Serial);
+      }
+      else if(dhtSettings["HumiMaxLimit"]<=event.relative_humidity || dhtSettings["HumiMinLimit"]>=event.relative_humidity ){
+        dhtReadings["Humidity"] = event.relative_humidity; 
+        dhtReadings.printTo(Serial);
+      }
+    }
+    int fre = dhtSettings["Frequency"].as<int>();
+    if(fre<1 || fre>3600)
+      dhtflag=false;
+    else{
+      delay(fre*1000);
+      Serial.println(fre);
+    }
+  }
 }
+
