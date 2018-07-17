@@ -6,7 +6,10 @@ void onWifiConnect(const WiFiEventStationModeGotIP& event) {
     saveConfig();
     return;
   }
-  WiFi.mode(WIFI_STA);
+  if(WiFi.getMode()!=3){
+    //server.close();
+    WiFi.mode(WIFI_STA);
+  }
   Serial.println("Connected to Wi-Fi.");
   net["IP"] = WiFi.localIP().toString();
   net["STATUS"] = true;
@@ -15,28 +18,6 @@ void onWifiConnect(const WiFiEventStationModeGotIP& event) {
   Serial.println();
   if (MDNS.begin("tiptop")) {
     Serial.println("MDNS responder started");
-  }
-  if(serverUp){
-    //server.close();
-    if(dev["PROTOCOL"] == "REST"){
-      server.on("/action" , action);
-    }
-    else if (dev["PROTOCOL"] = "MQTT"){
-      serverUp = false;
-      server.close();
-    }
-    else{
-      Serial.println("Unknown protocol");
-    }
-  }
-  else{
-    if(dev["PROTOCOL"] == "REST"){
-      server.on("/action", action);
-      server.onNotFound(handleNotFound);
-      server.begin();
-      Serial.println("HTTP server started");
-      serverUp = true;
-    }
   }
   relaySetup();
   setupDHT();
@@ -67,26 +48,7 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected& event) {
     String pwd = String(id);
     Serial.println(pwd);
     WiFi.softAP(dev["NAME"] , pwd.c_str());
-    if(serverUp){
-        server.on("/action" , localConfig);
-    }
-    else{
-        server.on("/action", localConfig);
-        server.onNotFound(handleNotFound);
-        server.begin();
-        Serial.println("HTTP server started");
-        serverUp = true;
-    }
   } 
-  else{
-    if(!serverUp){
-        server.on("/action", localConfig);
-        server.onNotFound(handleNotFound);
-        server.begin();
-        Serial.println("HTTP server started");
-        serverUp = true;
-    }
-  }
 }
 
 void connectWifi(){
@@ -104,6 +66,12 @@ void connectTo(){
 void modifyWiFi(JsonObject& newwifi){
   netConfMode = true;
   retryCount = 5;
+  //String input = server.arg(0);
+  //const size_t bufferSize = JSON_OBJECT_SIZE(2);
+  //DynamicJsonBuffer jsonBuffer(bufferSize);
+  //const char* json = input.c_str();
+  //Serial.println(json);
+  //JsonObject& newwifi = jsonBuffer.parseObject(json);
   newwifi.printTo(Serial);
   tempSSID = newwifi["SSID"].as<String>();
   tempPWD = newwifi["PASSWORD"].as<String>();  
