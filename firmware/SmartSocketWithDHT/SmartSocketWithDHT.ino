@@ -18,18 +18,18 @@ DHT_Unified dht(DHTPIN, DHTTYPE);
 Ticker restartTicker;
 Ticker wifiConnect;
 
+bool serverUp = false;
 bool netConfMode=false;
 bool dhtflag = false;
+
 String tempSSID;
 String tempPWD;
+
+HTTPClient http;    //Declare object of class HTTPClient
 
 const size_t netBufferSize = JSON_OBJECT_SIZE(4);
 DynamicJsonBuffer netJsonBuffer(netBufferSize);
 JsonObject& net = netJsonBuffer.createObject();
-
-const size_t tempNetBufferSize = JSON_OBJECT_SIZE(3);
-DynamicJsonBuffer tempNetJsonBuffer(tempNetBufferSize);
-JsonObject& tempNet = tempNetJsonBuffer.createObject();
 
 const size_t relayBufferSize = JSON_OBJECT_SIZE(5);
 DynamicJsonBuffer relayJsonBuffer(relayBufferSize);
@@ -66,17 +66,8 @@ ESP8266WebServer server(80);
 
 const int led = LED_BUILTIN;
 
-void positiveActionResponcer(String result){
-  server.send(200, "text/plain", "{\"status\":true,\"response\":"+result+"}");
-}
-
-void negativeActionResponcer(String msg){
-  server.send(200, "text/plain", "{\"status\":false,\"msg\":\""+msg+"\"}");
-}
-
 void makeRequest(bool status, String msg){
-  HTTPClient http;    //Declare object of class HTTPClient
-  http.begin("http://10.208.35.124:1880/event");      //Specify request destination
+  http.begin("https://tiptopgit-pradeepch.c9users.io/device/event");      //Specify request destination
   http.addHeader("Content-Type", "application/json");  //Specify content-type header
   int httpCode;
   if(status)
@@ -89,6 +80,21 @@ void makeRequest(bool status, String msg){
   http.end();  //Close connection
 }
 
+void auth(){
+  http.begin("https://tiptopgit-pradeepch.c9users.io/device/auth");      //Specify request destination
+  http.addHeader("Content-Type", "application/json");  //Specify content-type header
+  int httpCode;
+  String msg;
+  dev.printTo(msg);
+  httpCode = http.POST("{\"status\":true,\"device\":"+msg+"}");   //Send the request
+  String payload = http.getString();                  //Get the response payload
+  Serial.println(httpCode);   //Print HTTP return code
+  Serial.println(payload);    //Print request response payload
+  http.end();  //Close connection
+}
+
+
+
 void actionAvalyzer(String input){
   const size_t bufferSize = JSON_OBJECT_SIZE(8);
   DynamicJsonBuffer jsonBuffer(bufferSize);
@@ -98,10 +104,7 @@ void actionAvalyzer(String input){
   String type = root["type"].as<String>(); // "SmartSocketv0.0Switching"
     if(type == "Switching"){
       switching(root);
-    }
-    /*else if(type == "SmartSocketv0.0ConfigProtocol"){
-      
-    }*/    
+    }   
     else if(type == "ConfigNetwork"){
       root["msg"] = "Device is trying to connect...";
       String result;
@@ -117,27 +120,6 @@ void actionAvalyzer(String input){
     }
 }
 
-void action(){
-  actionAvalyzer(server.arg(0));
-}
-
-void handleNotFound(){
-  digitalWrite(led, 1);
-  String message = "File Not Found\n\n";
-  message += "URI: ";
-  message += server.uri();
-  message += "\nMethod: ";
-  message += (server.method() == HTTP_GET)?"GET":"POST";
-  message += "\nArguments: ";
-  message += server.args();
-  message += "\n";
-  for (uint8_t i=0; i<server.args(); i++){
-    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
-  }
-  server.send(404, "text/plain", message);
-  digitalWrite(led, 0);
-}
-
 void setup(void){
   Serial.begin(115200);
   SPIFFS.begin();
@@ -146,21 +128,17 @@ void setup(void){
   if(setConfigs()){
     connectWifi();
   }
-  server.on("/action", action);
-  server.onNotFound(handleNotFound);
-  server.begin();
-  Serial.println("HTTP server started");
 }
 
 void loop(void){
-  server.handleClient();
+  if(serverUp)
+    server.handleClient();
   if(dhtflag){
     // Get temperature event and print its value.
     sensors_event_t tEvent;
     sensors_event_t event;  
     dht.temperature().getEvent(&tEvent);
     dht.humidity().getEvent(&event);
-    
     if (isnan(tEvent.temperature  ) || isnan(event.relative_humidity)) {
       makeRequest(false,"Error reading temperature and humidity!");
     }
@@ -191,4 +169,3 @@ void loop(void){
     }
   }
 }
-
