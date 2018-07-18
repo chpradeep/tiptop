@@ -7,6 +7,7 @@ var logger = require('morgan');
 var indexRouter = require('./routes/index');
 var devRouter = require('./routes/device');
 var userRouter = require("./routes/user");
+var mqttHandler = require('./routes/mqtt');
 
 const mongoose = require('mongoose');
 
@@ -25,6 +26,11 @@ mongoose.connection.on('error', (err) => {
 });
 
 //--------------------------------------------
+
+var mqttClient = new mqttHandler(cred.mqttSettings);
+
+mqttClient.connect();
+//---------------------------------------------
 
 var app = express();
 
